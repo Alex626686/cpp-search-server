@@ -61,9 +61,13 @@ public:
     void AddDocument(int document_id, const string& document) {
         const vector<string> words = SplitIntoWordsNoStop(document);
         ++document_count_;
+        map<string, double> word_freq;
+
         for (string word : words) {
-            double count_words = count(words.begin(), words.end(), word);
-            word_to_document_freqs_[word].insert({ document_id, count_words / words.size() });
+            ++word_freq[word];
+        }
+        for (string word : words) {
+            word_to_document_freqs_[word].insert({ document_id, word_freq.at(word) / words.size() });
         }
     }
     vector<Document> FindTopDocuments(const string& raw_query) const {
@@ -120,14 +124,18 @@ private:
         return split_query;
     }
 
+    double CalculateIdf(const string& word) const {
+        double word_count = word_to_document_freqs_.at(word).size();
+        return log(document_count_ / word_count);
+    }
+
     vector<Document> FindAllDocuments(const Query& splited_query_words) const {
         map<int, double> document_to_relevance;
         vector<Document> matched_documents;
 
         for (string s : splited_query_words.p_words) {
             if (word_to_document_freqs_.count(s)) {
-                double word_count = word_to_document_freqs_.at(s).size();
-                double idf = log(document_count_ / word_count);
+                double idf = CalculateIdf(s);
                 map<int, double> id_tf = word_to_document_freqs_.at(s);
 
                 for (const auto& [id, tf] : id_tf) {
@@ -139,12 +147,12 @@ private:
         for (string s : splited_query_words.m_words) {
             if (word_to_document_freqs_.count(s)) {
                 map<int, double> id_tf = word_to_document_freqs_.at(s);
-                for (auto [id, tf] : id_tf) {
+                for (const auto& [id, tf] : id_tf) {
                     document_to_relevance.erase(id);
                 }
             }
         }
-        for (auto [id, relev] : document_to_relevance) {
+        for (const auto& [id, relev] : document_to_relevance) {
             matched_documents.push_back({ id, relev });
         }
         return matched_documents;
