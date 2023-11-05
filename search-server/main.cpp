@@ -1,11 +1,11 @@
-#include <algorithm>
-#include <cmath>
-#include <iostream>
-#include <set>
-#include <string>
-#include <utility>
-#include <vector>
-#include <map>
+#include <algorithm> 
+#include <cmath> 
+#include <iostream> 
+#include <set> 
+#include <string> 
+#include <utility> 
+#include <vector> 
+#include <map> 
 
 using namespace std;
 
@@ -61,13 +61,10 @@ public:
     void AddDocument(int document_id, const string& document) {
         const vector<string> words = SplitIntoWordsNoStop(document);
         ++document_count_;
-        map<string, double> word_freq;
+        double one_word = (1.0 / words.size());
 
         for (string word : words) {
-            ++word_freq[word];
-        }
-        for (string word : words) {
-            word_to_document_freqs_[word].insert({ document_id, word_freq.at(word) / words.size() });
+            word_to_document_freqs_[word].insert({ document_id, +one_word });
         }
     }
     vector<Document> FindTopDocuments(const string& raw_query) const {
