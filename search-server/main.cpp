@@ -8,10 +8,13 @@
 #include <utility>
 #include <vector>
 #include <optional>
+#include <numeric>
 
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double EPSILON = 1e-6;
+
 
 string ReadLine() {
     string s;
@@ -99,16 +102,16 @@ public:
 
     void AddDocument(int document_id, const string& document, DocumentStatus status,
         const vector<int>& ratings) {
-        if (document_id < 0 || documents_.count(document_id)) {
-            throw invalid_argument("invalid argument");
+        if (document_id < 0) {
+            throw invalid_argument("The document was not added because its id is negative");
+        }
+        if (documents_.count(document_id)) {
+            throw invalid_argument("The document was not added because its id matches an existing one");
         }
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inv_word_count = 1.0 / words.size();
         for (const string& word : words) {
-            if (IsValidWord(word)) {
-                word_to_document_freqs_[word][document_id] += inv_word_count;
-            }
-            else throw invalid_argument("invalid argument");
+            word_to_document_freqs_[word][document_id] += inv_word_count;
         }
         id_.push_back(document_id);
         documents_.emplace(document_id, DocumentData{ ComputeAverageRating(ratings), status });
@@ -118,25 +121,15 @@ public:
     vector<Document> FindTopDocuments(const string& raw_query,
         DocumentPredicate document_predicate) const {
         const Query query = ParseQuery(raw_query);
-        for (const string& word : query.plus_words) {
-            if (!IsValidWord(word)) {
-                throw invalid_argument("invalid argument");
-            }
-        }
-        for (const string& word : query.minus_words) {
-            if (!IsValidWord(word) || word.empty() || word[0] == '-') {
-                throw invalid_argument("invalid argument");
-            }
-        }
         auto matched_documents = FindAllDocuments(query, document_predicate);
 
         sort(matched_documents.begin(), matched_documents.end(),
             [](const Document& lhs, const Document& rhs) {
-                if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                if (abs(lhs.relevance - rhs.relevance) < EPSILON) {
                     return lhs.rating > rhs.rating;
                 }
                 else {
-                    return lhs.relevance > rhs.relevance;
+                    return lhs.relevance > rhs.relevance;//Не понимаю как тут сделать без else, ведь если if не будет true, тогда вообще ничего не вернется?
                 }
             });
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
@@ -193,10 +186,10 @@ public:
 
     int GetDocumentId(int index) const {
         if (id_.size() > index) {
-            return id_[index];
+            return id_.at(index);
         }
         else {
-            throw out_of_range("out of range ");
+            throw out_of_range("out of range GetDocumentId");
         }
     }
 
@@ -219,8 +212,12 @@ private:
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
             if (!IsStopWord(word)) {
+                if (!IsValidWord(word)) {
+                    throw invalid_argument("The document was not added because word contains special characters");
+                }
                 words.push_back(word);
             }
+
         }
         return words;
     }
@@ -229,10 +226,7 @@ private:
         if (ratings.empty()) {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
+        int rating_sum = accumulate(ratings.begin(), ratings.end(), 0);
         return rating_sum / static_cast<int>(ratings.size());
     }
 
@@ -248,6 +242,9 @@ private:
         if (text[0] == '-') {
             is_minus = true;
             text = text.substr(1);
+        }
+        if (!IsValidWord(text) || text.empty() || text[0] == '-') {
+            throw invalid_argument("The request FindTopDocuments is incorrect");
         }
         return { text, is_minus, IsStopWord(text) };
     }
@@ -327,4 +324,24 @@ void PrintDocument(const Document& document) {
         << "document_id = "s << document.id << ", "s
         << "relevance = "s << document.relevance << ", "s
         << "rating = "s << document.rating << " }"s << endl;
+}
+
+int main() {
+    try {
+        SearchServer s("in the on with"s);
+
+        s.AddDocument(1, "in the dark dark city", DocumentStatus::ACTUAL, { 1, 2, 3 });
+        s.AddDocument(3, "on the dark dark street", DocumentStatus::ACTUAL, { 1, 2, 3 });
+        s.AddDocument(2, "in the dark dark house", DocumentStatus::ACTUAL, { 1, 2, 3, 5, 10 });
+        s.AddDocument(4, "in the dark dark room", DocumentStatus::ACTUAL, { 1, 2, 3 });
+
+        const auto documents = s.FindTopDocuments("dark room");
+        for (const auto& doc : documents) {
+            PrintDocument(doc);
+        }
+    }
+    catch (const invalid_argument& e) {
+        cout << "Error: "s << e.what() << endl;
+    }
+
 }
