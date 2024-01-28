@@ -20,7 +20,7 @@ public:
 private:
 
     struct QueryResult {
-        std::vector<Document> res_request;
+        bool empty_request;
     };
 
     std::deque<QueryResult> requests_;
@@ -31,7 +31,12 @@ private:
 template <typename DocumentPredicate>
 std::vector<Document> RequestQueue::AddFindRequest(const std::string& raw_query, DocumentPredicate document_predicate) {
     std::vector<Document>& res = search_server_.FindTopDocuments(raw_query, document_predicate);
-    requests_.push_back({ res });
+    if (res.empty()) {
+        requests_.push_back({ true });
+    }
+    else {
+        requests_.push_back({ false });
+    }
     if (requests_.size() > min_in_day_) {
         requests_.pop_front();
     }
